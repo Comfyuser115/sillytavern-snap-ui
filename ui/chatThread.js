@@ -8,8 +8,8 @@
 import { loadSnapState, addSnap, markSnapViewed, getSnapsForCharacter } from "../lib/storage.js";
 import { requestSnap, makeSnapId } from "../lib/generation.js";
 import { resolvePersona } from "../lib/snapPersona.js";
-import { getContext } from "../../../st-context.js";
-import { this_chid, characters, getCurrentChatId } from "../../../../script.js";
+import { getContext } from "../../../../st-context.js";
+import { this_chid, characters, getCurrentChatId } from "../../../../../script.js";
 
 let panelEl = null;
 let launcherEl = null;

@@ -22,11 +22,11 @@ function escapeHtml(str) {
   })[c]);
 }
 
-function getRecentContextText(items, limit = 8) {
+function getRecentContextText(items, contactName, limit = 8) {
   return items
     .slice(-limit)
     .map((i) => {
-      const who = i.direction === "incoming" ? activeContact.name : "{{user}}";
+      const who = i.direction === "incoming" ? contactName : "{{user}}";
       const what = i.kind === "snap" ? `[sent a snap: ${i.description}]` : i.body;
       return `${who}: ${what}`;
     })
@@ -59,7 +59,7 @@ async function triggerAmbientReply(state, contact) {
       contactKey: String(contact.uid),
       contactName: contact.name,
       personaText: persona?.content,
-      recentContext: getRecentContextText(items),
+      recentContext: getRecentContextText(items, contact.name),
       direction: "incoming",
     });
     addItem(state, item);
@@ -133,7 +133,7 @@ function render() {
         contactKey: String(activeContact.uid),
         contactName: activeContact.name,
         personaText: persona?.content,
-        recentContext: getRecentContextText(freshItems),
+        recentContext: getRecentContextText(freshItems, activeContact.name),
         direction: "incoming",
       });
       addItem(state, reply);

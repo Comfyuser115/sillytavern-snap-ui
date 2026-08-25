@@ -1,0 +1,7 @@
+/* All snap-view styles must live under .snap-view-root so they never leak
+   into the rest of SillyTavern's UI. No UI is rendered yet (Phase 0/1). */
+.snap-view-root {
+  --snap-view-bg: #000;
+  --snap-view-fg: #fff;
+  --snap-view-accent: #fffc00;
+}

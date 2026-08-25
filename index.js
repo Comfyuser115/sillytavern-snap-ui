@@ -1,5 +1,6 @@
 import { loadSnapState, addSnap } from "./lib/storage.js";
 import { requestSnap } from "./lib/generation.js";
+import { resolvePersona } from "./lib/snapPersona.js";
 import { getContext } from "../../../extensions.js";
 import { this_chid, characters, getCurrentChatId } from "../../../../script.js";
 
@@ -25,9 +26,9 @@ async function testGenerateSnap(direction = "incoming") {
   const characterId = character.avatar;
   const chatId = getCurrentChatId();
   const state = loadSnapState();
-  const persona = state.personas[characterId] || {};
+  const persona = await resolvePersona(characterId, character.name, state.personas[characterId]);
 
-  console.log("[snap-view] requesting snap for", character.name);
+  console.log("[snap-view] requesting snap for", character.name, "using persona:", persona);
   const snap = await requestSnap({
     characterId,
     characterName: character.name,

@@ -1,7 +1,7 @@
 import { loadSnapState, addSnap } from "./lib/storage.js";
 import { requestSnap } from "./lib/generation.js";
 import { resolvePersona } from "./lib/snapPersona.js";
-import { getContext } from "../../../extensions.js";
+import { getContext } from "../../../st-context.js";
 import { this_chid, characters, getCurrentChatId } from "../../../../script.js";
 
 function getRecentContextText(limit = 6) {

@@ -1,6 +1,7 @@
 import { loadSnapState, addSnap } from "./lib/storage.js";
 import { requestSnap } from "./lib/generation.js";
 import { resolvePersona } from "./lib/snapPersona.js";
+import { mountSnapOverlay } from "./ui/chatThread.js";
 import { getContext } from "../../../st-context.js";
 import { this_chid, characters, getCurrentChatId } from "../../../../script.js";
 
@@ -44,8 +45,9 @@ async function testGenerateSnap(direction = "incoming") {
 }
 
 jQuery(() => {
+  mountSnapOverlay();
   console.log(
-    "[snap-view] Phase 0/1 scaffold loaded. Run `SnapView.testGenerateSnap()` in the console to test the generation pipeline.",
+    "[snap-view] Loaded. Click the camera bubble (bottom-right) to open the snap panel, or run `SnapView.testGenerateSnap()` in the console.",
   );
   window.SnapView = { testGenerateSnap, loadSnapState };
 });

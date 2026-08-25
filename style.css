@@ -1,7 +1,153 @@
-/* All snap-view styles must live under .snap-view-root so they never leak
-   into the rest of SillyTavern's UI. No UI is rendered yet (Phase 0/1). */
+/* All snap-view styles live under .snap-view-root so they never leak into
+   the rest of SillyTavern's UI. */
 .snap-view-root {
-  --snap-view-bg: #000;
-  --snap-view-fg: #fff;
+  --snap-view-bg: #0b0b0d;
+  --snap-view-bg-alt: #17171b;
+  --snap-view-fg: #f5f5f5;
+  --snap-view-muted: #9a9aa2;
   --snap-view-accent: #fffc00;
+  --snap-view-accent-fg: #111;
+  box-sizing: border-box;
+}
+.snap-view-root * {
+  box-sizing: border-box;
+}
+
+.snap-view-launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--snap-view-accent);
+  color: var(--snap-view-accent-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 9998;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.snap-view-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 84px;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  height: 520px;
+  max-height: calc(100vh - 120px);
+  background: var(--snap-view-bg);
+  color: var(--snap-view-fg);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+
+.snap-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--snap-view-bg-alt);
+  font-weight: 600;
+}
+.snap-view-close {
+  background: none;
+  border: none;
+  color: var(--snap-view-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.snap-view-empty {
+  padding: 20px;
+  color: var(--snap-view-muted);
+  text-align: center;
+}
+
+.snap-view-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snap-view-msg {
+  max-width: 80%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  line-height: 1.35;
+}
+.snap-view-msg-char {
+  align-self: flex-start;
+  background: var(--snap-view-bg-alt);
+}
+.snap-view-msg-user {
+  align-self: flex-end;
+  background: var(--snap-view-accent);
+  color: var(--snap-view-accent-fg);
+}
+.snap-view-msg-name {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+
+.snap-view-bubble {
+  align-self: center;
+  width: 90%;
+  border: 1px solid var(--snap-view-accent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.snap-view-bubble-opened {
+  border-color: var(--snap-view-muted);
+  opacity: 0.7;
+}
+.snap-view-bubble-label {
+  font-weight: 600;
+  text-align: center;
+}
+.snap-view-bubble-body {
+  margin-top: 6px;
+  text-align: center;
+}
+.snap-view-bubble-desc {
+  font-style: italic;
+  color: var(--snap-view-muted);
+}
+.snap-view-bubble-caption {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.snap-view-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--snap-view-bg-alt);
+}
+.snap-view-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: var(--snap-view-accent);
+  color: var(--snap-view-accent-fg);
+  font-weight: 600;
+  cursor: pointer;
+}
+.snap-view-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

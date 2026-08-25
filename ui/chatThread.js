@@ -5,9 +5,10 @@
 // setup is one active character chat at a time, driven off that
 // character's own lorebook entry, so a cross-character hub isn't needed
 // for the core loop to be useful.
-import { loadSnapState, addSnap, markSnapViewed, getSnapsForCharacter } from "../lib/storage.js";
+import { loadSnapState, addSnap, getSnapsForCharacter } from "../lib/storage.js";
 import { requestSnap, makeSnapId } from "../lib/generation.js";
 import { resolvePersona } from "../lib/snapPersona.js";
+import { openViewer } from "./snapViewer.js";
 import { getContext } from "../../../../st-context.js";
 import { this_chid, characters, getCurrentChatId } from "../../../../../script.js";
 
@@ -42,14 +43,15 @@ function renderMessages(context) {
 }
 
 function renderSnapBubble(snap, index) {
-  const opened = snap.viewedAt !== null;
-  const label = opened ? "Opened snap" : snap.direction === "incoming" ? "📩 New snap" : "📤 Snap sent";
-  return `<div class="snap-view-bubble ${opened ? "snap-view-bubble-opened" : ""}" data-snap-index="${index}">
+  const label = snap.expired
+    ? "Expired snap"
+    : snap.viewedAt !== null
+      ? "Opened snap"
+      : snap.direction === "incoming"
+        ? "📩 New snap — tap to view"
+        : "📤 Snap sent";
+  return `<div class="snap-view-bubble ${snap.expired ? "snap-view-bubble-expired" : ""}" data-snap-index="${index}">
     <div class="snap-view-bubble-label">${label}</div>
-    <div class="snap-view-bubble-body" style="display:none">
-      <div class="snap-view-bubble-desc">${escapeHtml(snap.description)}</div>
-      <div class="snap-view-bubble-caption">"${escapeHtml(snap.caption)}"${snap.mood ? ` — ${escapeHtml(snap.mood)}` : ""}</div>
-    </div>
   </div>`;
 }
 
@@ -90,15 +92,8 @@ function render() {
   panelEl.find(".snap-view-bubble").on("click", function () {
     const idx = Number($(this).data("snap-index"));
     const snap = snaps[idx];
-    if (!snap) return;
-    const body = $(this).find(".snap-view-bubble-body");
-    const wasHidden = body.css("display") === "none";
-    body.css("display", wasHidden ? "block" : "none");
-    if (wasHidden && snap.viewedAt === null) {
-      markSnapViewed(state, snap.id);
-      $(this).find(".snap-view-bubble-label").text("Opened snap");
-      $(this).addClass("snap-view-bubble-opened");
-    }
+    if (!snap || snap.expired) return;
+    openViewer(snaps, idx, state, () => render());
   });
 
   panelEl.find(".snap-view-compose").on("click", () => {

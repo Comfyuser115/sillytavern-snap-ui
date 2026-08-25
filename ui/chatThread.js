@@ -9,6 +9,7 @@ import { loadSnapState, addSnap, getSnapsForCharacter } from "../lib/storage.js"
 import { requestSnap, makeSnapId } from "../lib/generation.js";
 import { resolvePersona } from "../lib/snapPersona.js";
 import { openViewer } from "./snapViewer.js";
+import { updateSnapContext } from "../lib/contextInjection.js";
 import { getContext } from "../../../../st-context.js";
 import { this_chid, characters, getCurrentChatId } from "../../../../../script.js";
 
@@ -68,6 +69,7 @@ function render() {
   const context = getContext();
   const state = loadSnapState();
   const snaps = getSnapsForCharacter(state, characterId).sort((a, b) => a.createdAt - b.createdAt);
+  updateSnapContext(state, characterId, character.name);
 
   panelEl.html(`
     <div class="snap-view-header">

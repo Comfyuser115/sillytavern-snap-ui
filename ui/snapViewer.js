@@ -2,7 +2,7 @@
 // expiresAfterViewMs, tap zones move left/right, closing marks the snap
 // expired so it can't be reopened (data stays in storage for the
 // "memory"/context-injection layer — only the UI is gated).
-import { markSnapViewed, expireSnap } from "../lib/storage.js";
+import { markItemViewed, expireItem } from "../lib/storage.js";
 
 function escapeHtml(str) {
   return (str || "").replace(/[&<>"']/g, (c) => ({
@@ -36,7 +36,7 @@ function renderCurrent() {
   }
 
   if (snap.viewedAt === null) {
-    markSnapViewed(stateRef, snap.id);
+    markItemViewed(stateRef, snap.id);
   }
 
   overlayEl.html(`
@@ -60,7 +60,7 @@ function renderCurrent() {
 
   clearTimer();
   timerHandle = setTimeout(() => {
-    expireSnap(stateRef, snap.id);
+    expireItem(stateRef, snap.id);
     goTo(currentIndex + 1);
   }, snap.expiresAfterViewMs);
 }

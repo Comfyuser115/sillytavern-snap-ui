@@ -1,20 +1,16 @@
-// Phase 2 minimal UI: a single floating panel scoped to the currently
-// active character's chat. Mirrors ST's chat log, plus snap bubbles that
-// hide their content until tapped (matching Snapchat's chat-list behavior).
-// No stories bar / cross-character list yet (Phase 3) — this instance's
-// setup is one active character chat at a time, driven off that
-// character's own lorebook entry, so a cross-character hub isn't needed
-// for the core loop to be useful.
-import { loadSnapState, addSnap, getSnapsForCharacter } from "../lib/storage.js";
-import { requestSnap, makeSnapId } from "../lib/generation.js";
-import { resolvePersona } from "../lib/snapPersona.js";
+// Per-contact thread: self-contained conversation stored entirely in
+// snap-view's own state (not mirroring ST's main chat), since contacts are
+// lorebook entries rather than real ST characters/chats. Text items render
+// as normal bubbles; snap items stay hidden until tapped, opening the
+// full-screen viewer.
+import { loadSnapState, addItem, getItemsForContact } from "../lib/storage.js";
+import { requestContactReply, makeSnapId } from "../lib/generation.js";
+import { getContactPersona } from "../lib/contacts.js";
 import { openViewer } from "./snapViewer.js";
-import { updateSnapContext } from "../lib/contextInjection.js";
-import { getContext } from "../../../../st-context.js";
-import { this_chid, characters, getCurrentChatId } from "../../../../../script.js";
 
 let panelEl = null;
-let launcherEl = null;
+let activeContact = null; // { uid, name }
+let onLeaveCb = null;
 
 function escapeHtml(str) {
   return (str || "").replace(/[&<>"']/g, (c) => ({
@@ -26,87 +22,141 @@ function escapeHtml(str) {
   })[c]);
 }
 
-function getRecentContextText(limit = 6) {
-  const context = getContext();
-  const chat = context.chat || [];
-  return chat.slice(-limit).map((m) => `${m.name}: ${m.mes}`).join("\n");
+function getRecentContextText(items, limit = 8) {
+  return items
+    .slice(-limit)
+    .map((i) => {
+      const who = i.direction === "incoming" ? activeContact.name : "{{user}}";
+      const what = i.kind === "snap" ? `[sent a snap: ${i.description}]` : i.body;
+      return `${who}: ${what}`;
+    })
+    .join("\n");
 }
 
-function renderMessages(context) {
-  return (context.chat || [])
-    .map(
-      (m) => `<div class="snap-view-msg ${m.is_user ? "snap-view-msg-user" : "snap-view-msg-char"}">
-        <div class="snap-view-msg-name">${escapeHtml(m.name)}</div>
-        <div class="snap-view-msg-text">${escapeHtml(m.mes)}</div>
-      </div>`,
-    )
-    .join("");
+function renderTextBubble(item) {
+  const side = item.direction === "incoming" ? "snap-view-msg-char" : "snap-view-msg-user";
+  return `<div class="snap-view-msg ${side}"><div class="snap-view-msg-text">${escapeHtml(item.body)}</div></div>`;
 }
 
-function renderSnapBubble(snap, index) {
-  const label = snap.expired
+function renderSnapBubble(item, index) {
+  const label = item.expired
     ? "Expired snap"
-    : snap.viewedAt !== null
+    : item.viewedAt !== null
       ? "Opened snap"
-      : snap.direction === "incoming"
+      : item.direction === "incoming"
         ? "📩 New snap — tap to view"
         : "📤 Snap sent";
-  return `<div class="snap-view-bubble ${snap.expired ? "snap-view-bubble-expired" : ""}" data-snap-index="${index}">
+  return `<div class="snap-view-bubble ${item.expired ? "snap-view-bubble-expired" : ""}" data-snap-index="${index}">
     <div class="snap-view-bubble-label">${label}</div>
   </div>`;
 }
 
-function render() {
-  if (!panelEl) return;
-
-  if (this_chid === undefined) {
-    panelEl.html('<div class="snap-view-empty">Open a character chat first.</div>');
-    return;
+async function triggerAmbientReply(state, contact) {
+  try {
+    const persona = await getContactPersona(state.selectedWorld, contact.uid);
+    const items = getItemsForContact(state, String(contact.uid));
+    const item = await requestContactReply({
+      contactKey: String(contact.uid),
+      contactName: contact.name,
+      personaText: persona?.content,
+      recentContext: getRecentContextText(items),
+      direction: "incoming",
+    });
+    addItem(state, item);
+  } catch (e) {
+    console.error("[snap-view] ambient reply failed:", e);
   }
+}
 
-  const character = characters[this_chid];
-  const characterId = character.avatar;
-  const context = getContext();
+function render() {
+  if (!panelEl || !activeContact) return;
+
   const state = loadSnapState();
-  const snaps = getSnapsForCharacter(state, characterId).sort((a, b) => a.createdAt - b.createdAt);
-  updateSnapContext(state, characterId, character.name);
+  const items = getItemsForContact(state, String(activeContact.uid)).sort(
+    (a, b) => a.createdAt - b.createdAt,
+  );
+  const snapItems = items.filter((i) => i.kind === "snap");
 
   panelEl.html(`
     <div class="snap-view-header">
-      <span>${escapeHtml(character.name)}</span>
-      <button class="snap-view-close" title="Close">✕</button>
+      <button class="snap-view-back" title="Back">←</button>
+      <span>${escapeHtml(activeContact.name)}</span>
+      <span style="width:20px"></span>
     </div>
     <div class="snap-view-messages">
-      ${renderMessages(context)}
-      ${snaps.map(renderSnapBubble).join("")}
+      ${items
+        .map((item) => (item.kind === "text" ? renderTextBubble(item) : renderSnapBubble(item, snapItems.indexOf(item))))
+        .join("")}
     </div>
-    <div class="snap-view-actions">
-      <button class="snap-view-btn snap-view-compose">📷 Send a snap</button>
-      <button class="snap-view-btn snap-view-request">✨ Ask for a snap</button>
+    <div class="snap-view-actions snap-view-actions-thread">
+      <input type="text" class="snap-view-input" placeholder="Send a message..." />
+      <button class="snap-view-btn snap-view-send">Send</button>
+      <button class="snap-view-btn snap-view-compose" title="Send a snap">📷</button>
     </div>
   `);
 
   const messagesEl = panelEl.find(".snap-view-messages");
   messagesEl.scrollTop(messagesEl[0].scrollHeight);
 
-  panelEl.find(".snap-view-close").on("click", () => toggle(false));
+  panelEl.find(".snap-view-back").on("click", () => leaveThread());
 
   panelEl.find(".snap-view-bubble").on("click", function () {
     const idx = Number($(this).data("snap-index"));
-    const snap = snaps[idx];
+    const snap = snapItems[idx];
     if (!snap || snap.expired) return;
-    openViewer(snaps, idx, state, () => render());
+    openViewer(snapItems, idx, state, () => render());
+  });
+
+  async function sendText() {
+    const input = panelEl.find(".snap-view-input");
+    const text = input.val().trim();
+    if (!text) return;
+    input.val("").prop("disabled", true);
+
+    addItem(state, {
+      id: makeSnapId(),
+      contactKey: String(activeContact.uid),
+      direction: "outgoing",
+      kind: "text",
+      body: text,
+      createdAt: Date.now(),
+      viewedAt: Date.now(),
+      expiresAfterViewMs: 0,
+      expired: false,
+    });
+    render();
+
+    try {
+      const persona = await getContactPersona(state.selectedWorld, activeContact.uid);
+      const freshItems = getItemsForContact(state, String(activeContact.uid));
+      const reply = await requestContactReply({
+        contactKey: String(activeContact.uid),
+        contactName: activeContact.name,
+        personaText: persona?.content,
+        recentContext: getRecentContextText(freshItems),
+        direction: "incoming",
+      });
+      addItem(state, reply);
+      render();
+    } catch (e) {
+      console.error("[snap-view] reply failed:", e);
+    }
+  }
+
+  panelEl.find(".snap-view-send").on("click", sendText);
+  panelEl.find(".snap-view-input").on("keydown", (e) => {
+    if (e.key === "Enter") sendText();
   });
 
   panelEl.find(".snap-view-compose").on("click", () => {
     const description = window.prompt("Describe your snap:");
     if (!description) return;
     const caption = window.prompt("Caption (optional):") || "";
-    addSnap(state, {
+    addItem(state, {
       id: makeSnapId(),
-      characterId,
-      chatId: getCurrentChatId(),
+      contactKey: String(activeContact.uid),
       direction: "outgoing",
+      kind: "snap",
       description,
       caption,
       mood: undefined,
@@ -117,42 +167,25 @@ function render() {
     });
     render();
   });
-
-  panelEl.find(".snap-view-request").on("click", async function () {
-    const btn = $(this).prop("disabled", true).text("Generating...");
-    try {
-      const persona = await resolvePersona(characterId, character.name, state.personas[characterId]);
-      const snap = await requestSnap({
-        characterId,
-        characterName: character.name,
-        chatId: getCurrentChatId(),
-        direction: "incoming",
-        persona,
-        recentContext: getRecentContextText(),
-      });
-      addSnap(state, snap);
-      render();
-    } catch (e) {
-      console.error("[snap-view] failed to generate snap:", e);
-      btn.prop("disabled", false).text("✨ Ask for a snap");
-    }
-  });
 }
 
-export function toggle(force) {
-  if (!panelEl) return;
-  const show = force !== undefined ? force : panelEl.is(":hidden");
-  panelEl.toggle(show);
-  if (show) render();
+function leaveThread() {
+  const state = loadSnapState();
+  const contact = activeContact;
+  activeContact = null;
+  if (panelEl) panelEl.hide().empty();
+  // "They text you while you're away": fire a background reply for the
+  // contact you just left, so something's waiting next time you open it.
+  if (contact) triggerAmbientReply(state, contact);
+  if (onLeaveCb) onLeaveCb();
 }
 
-export function mountSnapOverlay() {
-  if (panelEl) return;
-
-  panelEl = $('<div class="snap-view-root snap-view-panel"></div>').appendTo(document.body).hide();
-
-  launcherEl = $('<div class="snap-view-root snap-view-launcher" title="Snaps">📸</div>').appendTo(
-    document.body,
-  );
-  launcherEl.on("click", () => toggle());
+export function openThread(contact, onLeave) {
+  activeContact = contact;
+  onLeaveCb = onLeave;
+  if (!panelEl) {
+    panelEl = $('<div class="snap-view-root snap-view-panel"></div>').appendTo(document.body);
+  }
+  panelEl.show();
+  render();
 }

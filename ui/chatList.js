@@ -2,6 +2,7 @@
 // contact (lorebook entries picked in the contact manager), tap to open
 // their thread.
 import { loadSnapState, getLastItemForContact, hasUnreadForContact } from "../lib/storage.js";
+import { isTyping, onTypingChange } from "../lib/typing.js";
 import { openContactManager } from "./contactManager.js";
 import { openThread } from "./chatThread.js";
 
@@ -48,14 +49,17 @@ function previewLabel(item, contactName) {
 function renderRow(contact, state) {
   const item = getLastItemForContact(state, String(contact.uid));
   const unread = hasUnreadForContact(state, String(contact.uid));
+  const typing = isTyping(String(contact.uid));
+  const preview = typing ? "typing…" : previewLabel(item, contact.name);
+  const previewClass = typing ? "snap-view-row-typing" : unread ? "snap-view-row-unread" : "";
   return `<div class="snap-view-row" data-uid="${contact.uid}">
     <div class="snap-view-row-avatar" style="background:${avatarColor(contact.name)}">${escapeHtml(contact.name[0] || "?")}</div>
     <div class="snap-view-row-main">
       <div class="snap-view-row-name">${escapeHtml(contact.name)}</div>
-      <div class="snap-view-row-preview ${unread ? "snap-view-row-unread" : ""}">${escapeHtml(previewLabel(item, contact.name))}</div>
+      <div class="snap-view-row-preview ${previewClass}">${escapeHtml(preview)}</div>
     </div>
     <div class="snap-view-row-time">${item ? formatTimeAgo(item.createdAt) : ""}</div>
-    ${unread ? '<div class="snap-view-row-dot"></div>' : ""}
+    ${typing ? '<div class="snap-view-row-typing-dot" title="typing…"></div>' : unread ? '<div class="snap-view-row-dot"></div>' : ""}
   </div>`;
 }
 
@@ -108,4 +112,9 @@ export function mountSnapOverlay() {
     document.body,
   );
   launcherEl.on("click", () => toggle());
+
+  // re-render chat list when any contact starts/stops typing
+  onTypingChange(() => {
+    if (listEl && listEl.is(":visible")) render();
+  });
 }

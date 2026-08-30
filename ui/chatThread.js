@@ -6,6 +6,7 @@
 import { loadSnapState, addItem, getItemsForContact } from "../lib/storage.js";
 import { requestContactReply, makeSnapId } from "../lib/generation.js";
 import { getContactPersona } from "../lib/contacts.js";
+import { isTyping, setTyping, clearTyping, onTypingChange } from "../lib/typing.js";
 import { openViewer } from "./snapViewer.js";
 
 let panelEl = null;
@@ -76,6 +77,7 @@ function render() {
     (a, b) => a.createdAt - b.createdAt,
   );
   const snapItems = items.filter((i) => i.kind === "snap");
+  const typing = isTyping(String(activeContact.uid));
 
   panelEl.html(`
     <div class="snap-view-header">
@@ -87,11 +89,16 @@ function render() {
       ${items
         .map((item) => (item.kind === "text" ? renderTextBubble(item) : renderSnapBubble(item, snapItems.indexOf(item))))
         .join("")}
+      ${
+        typing
+          ? `<div class="snap-view-typing"><span class="snap-view-typing-dots"><span></span><span></span><span></span></span> <span class="snap-view-typing-label">${escapeHtml(activeContact.name)} is typing…</span></div>`
+          : ""
+      }
     </div>
     <div class="snap-view-actions snap-view-actions-thread">
-      <input type="text" class="snap-view-input" placeholder="Send a message..." />
-      <button class="snap-view-btn snap-view-send">Send</button>
-      <button class="snap-view-btn snap-view-compose" title="Send a snap">📷</button>
+      <input type="text" class="snap-view-input" placeholder="Send a message..." ${typing ? "disabled" : ""} />
+      <button class="snap-view-btn snap-view-send" ${typing ? "disabled" : ""}>Send</button>
+      <button class="snap-view-btn snap-view-compose" title="Send a snap" ${typing ? "disabled" : ""}>📷</button>
     </div>
   `);
 
@@ -111,11 +118,12 @@ function render() {
     const input = panelEl.find(".snap-view-input");
     const text = input.val().trim();
     if (!text) return;
+    const keyStr = String(activeContact.uid);
     input.val("").prop("disabled", true);
 
     addItem(state, {
       id: makeSnapId(),
-      contactKey: String(activeContact.uid),
+      contactKey: keyStr,
       direction: "outgoing",
       kind: "text",
       body: text,
@@ -124,22 +132,26 @@ function render() {
       expiresAfterViewMs: 0,
       expired: false,
     });
+    // show typing immediately, before persona fetch / profile switch
+    setTyping(keyStr);
     render();
 
     try {
       const persona = await getContactPersona(state.selectedWorld, activeContact.uid);
-      const freshItems = getItemsForContact(state, String(activeContact.uid));
+      const freshItems = getItemsForContact(state, keyStr);
       const reply = await requestContactReply({
-        contactKey: String(activeContact.uid),
+        contactKey: keyStr,
         contactName: activeContact.name,
         personaText: persona?.content,
         recentContext: getRecentContextText(freshItems, activeContact.name),
         direction: "incoming",
       });
       addItem(state, reply);
-      render();
     } catch (e) {
       console.error("[snap-view] reply failed:", e);
+    } finally {
+      clearTyping(keyStr);
+      render();
     }
   }
 
@@ -173,12 +185,18 @@ function leaveThread() {
   const state = loadSnapState();
   const contact = activeContact;
   activeContact = null;
+  if (typingUnsub) {
+    typingUnsub();
+    typingUnsub = null;
+  }
   if (panelEl) panelEl.hide().empty();
   // "They text you while you're away": fire a background reply for the
   // contact you just left, so something's waiting next time you open it.
   if (contact) triggerAmbientReply(state, contact);
   if (onLeaveCb) onLeaveCb();
 }
+
+let typingUnsub = null;
 
 export function openThread(contact, onLeave) {
   activeContact = contact;
@@ -188,4 +206,9 @@ export function openThread(contact, onLeave) {
   }
   panelEl.show();
   render();
+  if (typingUnsub) typingUnsub();
+  typingUnsub = onTypingChange(() => {
+    if (activeContact && isTyping(String(activeContact.uid))) render();
+    else if (activeContact) render();
+  });
 }

@@ -53,19 +53,64 @@ function renderSnapBubble(item, index) {
 }
 
 async function triggerAmbientReply(state, contact) {
+  const keyStr = String(contact.uid);
+
+  // Dedup: already generating for this contact
+  if (isTyping(keyStr)) return;
+
+  // Only reply if the last item is from the user (outgoing) — i.e. they
+  // have something to reply to. If last is incoming (or no history),
+  // there's nothing pending, so skip and avoid spam / 429s.
+  const items = getItemsForContact(state, keyStr);
+  if (items.length === 0) return;
+  const last = [...items].sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (!last || last.direction !== "outgoing") return;
+
+  // Cooldown: don't re-trigger within 30s (prevents rapid leave/re-enter
+  // from queueing duplicate generations and hammering the small snap model).
+  const now = Date.now();
+  state.lastAmbientAt = state.lastAmbientAt || {};
+  const lastAttempt = state.lastAmbientAt[keyStr] || 0;
+  if (now - lastAttempt < 30000) return;
+  state.lastAmbientAt[keyStr] = now;
+
+  // Persist the attempt timestamp (debounce even if generation fails, so
+  // a 429 doesn't immediately retry in a tight loop — the next leave
+  // after cooldown will retry).
+  try {
+    const { saveSnapState } = await import("../lib/storage.js");
+    saveSnapState();
+  } catch {}
+
   try {
     const persona = await getContactPersona(state.selectedWorld, contact.uid);
-    const items = getItemsForContact(state, String(contact.uid));
+    const freshItems = getItemsForContact(state, keyStr);
+    // Re-check: user may have already gotten a reply while persona was loading
+    const freshLast = [...freshItems].sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (!freshLast || freshLast.direction !== "outgoing") return;
+
     const item = await requestContactReply({
-      contactKey: String(contact.uid),
+      contactKey: keyStr,
       contactName: contact.name,
       personaText: persona?.content,
-      recentContext: getRecentContextText(items, contact.name),
+      recentContext: getRecentContextText(freshItems, contact.name),
       direction: "incoming",
     });
     addItem(state, item);
   } catch (e) {
-    console.error("[snap-view] ambient reply failed:", e);
+    const msg = (e?.message || e?.toString() || "").toLowerCase();
+    const isRateLimit = msg.includes("too many requests") || msg.includes("429") || e?.status === 429;
+    if (isRateLimit) {
+      console.warn(`[snap-view] ambient reply rate-limited for ${contact.name}, will retry next leave:`, e);
+      // back off longer so immediate re-leave doesn't instantly retry
+      state.lastAmbientAt[keyStr] = Date.now();
+      try {
+        const { saveSnapState } = await import("../lib/storage.js");
+        saveSnapState();
+      } catch {}
+    } else {
+      console.error("[snap-view] ambient reply failed:", e);
+    }
   }
 }
 
@@ -190,9 +235,32 @@ function leaveThread() {
     typingUnsub = null;
   }
   if (panelEl) panelEl.hide().empty();
-  // "They text you while you're away": fire a background reply for the
-  // contact you just left, so something's waiting next time you open it.
+  // "They text you while you're away": only if they have a pending
+  // outgoing message/snap to respond to. This prevents the 5-at-once
+  // 429 bursts from before (where every leave fired regardless).
   if (contact) triggerAmbientReply(state, contact);
+
+  // Opportunistic sweep: if another contact has a pending reply that
+  // previously hit a 429/cooldown, piggyback a single retry when you
+  // return to the chat list. Limits to 1 per leave to avoid bursts.
+  setTimeout(() => {
+    try {
+      const fresh = loadSnapState();
+      for (const c of fresh.contacts || []) {
+        if (contact && String(c.uid) === String(contact.uid)) continue;
+        if (isTyping(String(c.uid))) continue;
+        const its = getItemsForContact(fresh, String(c.uid));
+        if (its.length === 0) continue;
+        const last = [...its].sort((a, b) => b.createdAt - a.createdAt)[0];
+        if (!last || last.direction !== "outgoing") continue;
+        const lastAtt = fresh.lastAmbientAt?.[String(c.uid)] || 0;
+        if (Date.now() - lastAtt < 30000) continue;
+        triggerAmbientReply(fresh, c);
+        break;
+      }
+    } catch {}
+  }, 800);
+
   if (onLeaveCb) onLeaveCb();
 }
 

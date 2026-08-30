@@ -2,7 +2,7 @@
 // expiresAfterViewMs, tap zones move left/right, closing marks the snap
 // expired so it can't be reopened (data stays in storage for the
 // "memory"/context-injection layer — only the UI is gated).
-import { markItemViewed, expireItem } from "../lib/storage.js";
+import { markItemViewed, expireItem, setItemSaved } from "../lib/storage.js";
 
 function escapeHtml(str) {
   return (str || "").replace(/[&<>"']/g, (c) => ({
@@ -39,14 +39,20 @@ function renderCurrent() {
     markItemViewed(stateRef, snap.id);
   }
 
+  const isSaved = !!snap.saved;
   overlayEl.html(`
     <div class="snap-view-viewer-progress-track"><div class="snap-view-viewer-progress-fill"></div></div>
     <div class="snap-view-viewer-card">
       <div class="snap-view-viewer-desc">${escapeHtml(snap.description)}</div>
       <div class="snap-view-viewer-caption">${escapeHtml(snap.caption)}</div>
+      ${isSaved ? '<div class="snap-view-viewer-saved-badge">📌 Saved in Chat</div>' : ""}
     </div>
     <div class="snap-view-viewer-zone snap-view-viewer-zone-left"></div>
     <div class="snap-view-viewer-zone snap-view-viewer-zone-right"></div>
+    <div class="snap-view-viewer-actions">
+      <button class="snap-view-viewer-save">${isSaved ? "Unsave" : "Save in Chat"}</button>
+      <button class="snap-view-viewer-close">Close</button>
+    </div>
   `);
 
   const fill = overlayEl.find(".snap-view-viewer-progress-fill");
@@ -57,12 +63,24 @@ function renderCurrent() {
 
   overlayEl.find(".snap-view-viewer-zone-left").on("click", () => goTo(currentIndex - 1));
   overlayEl.find(".snap-view-viewer-zone-right").on("click", () => goTo(currentIndex + 1));
+  overlayEl.find(".snap-view-viewer-close").on("click", () => closeViewer());
+  overlayEl.find(".snap-view-viewer-save").on("click", () => {
+    const newSaved = !snap.saved;
+    setItemSaved(stateRef, snap.id, newSaved);
+    snap.saved = newSaved;
+    // if saving, cancel expiry timer so it doesn't disappear
+    if (newSaved) clearTimer();
+    renderCurrent();
+  });
 
   clearTimer();
-  timerHandle = setTimeout(() => {
-    expireItem(stateRef, snap.id);
-    goTo(currentIndex + 1);
-  }, snap.expiresAfterViewMs);
+  // saved snaps never auto-expire/replayable — only non-saved auto-advance
+  if (!isSaved) {
+    timerHandle = setTimeout(() => {
+      expireItem(stateRef, snap.id);
+      goTo(currentIndex + 1);
+    }, snap.expiresAfterViewMs);
+  }
 }
 
 function goTo(index) {

@@ -342,6 +342,72 @@
   right: 0;
 }
 
+.snap-view-viewer-actions {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 2;
+}
+
+.snap-view-viewer-save,
+.snap-view-viewer-close {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.snap-view-viewer-save:hover,
+.snap-view-viewer-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.snap-view-viewer-saved-badge {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--snap-view-accent);
+  font-weight: 700;
+}
+
+.snap-view-bubble {
+  position: relative;
+}
+
+.snap-view-bubble-saved {
+  border-color: var(--snap-view-accent);
+  background: rgba(255, 252, 0, 0.08);
+}
+
+.snap-view-bubble-opened {
+  border-color: rgba(255, 255, 255, 0.15);
+  opacity: 0.7;
+}
+
+.snap-view-bubble-save {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--snap-view-fg);
+  font-size: 11px;
+  cursor: pointer;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.snap-view-bubble-save:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .snap-view-typing {
   align-self: flex-start;
   background: var(--snap-view-bg-alt);
